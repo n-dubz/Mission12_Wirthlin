@@ -1,0 +1,6 @@
+@Mission11_Wirthlin.API_HostAddress = http://localhost:5038
+
+GET {{Mission11_Wirthlin.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
