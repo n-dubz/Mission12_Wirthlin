@@ -77,3 +77,4 @@
 /Users/nicko/Desktop/Mission11_Wirthlin/backend/Mission11_Wirthlin.API/obj/Debug/net8.0/Mission11_Wirthlin.API.pdb
 /Users/nicko/Desktop/Mission11_Wirthlin/backend/Mission11_Wirthlin.API/obj/Debug/net8.0/Mission11_Wirthlin.API.genruntimeconfig.cache
 /Users/nicko/Desktop/Mission11_Wirthlin/backend/Mission11_Wirthlin.API/obj/Debug/net8.0/ref/Mission11_Wirthlin.API.dll
+/Users/nicko/Desktop/Mission11_Wirthlin/backend/Mission11_Wirthlin.API/obj/Debug/net8.0/Mission11_Wirthlin.API.sourcelink.json

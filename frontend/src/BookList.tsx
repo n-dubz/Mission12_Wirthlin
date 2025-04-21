@@ -1,5 +1,23 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import 'bootstrap/dist/css/bootstrap.min.css';
+
+// Add CartContext
+interface CartItem extends Book {
+  quantity: number;
+}
+
+export const CartContext = React.createContext<{
+  cart: CartItem[];
+  addToCart: (book: Book) => void;
+  updateQuantity: (bookId: number, quantity: number) => void;
+  getCartTotal: () => number;
+}>({
+  cart: [],
+  addToCart: () => {},
+  updateQuantity: () => {},
+  getCartTotal: () => 0,
+});
 
 const styles = {
   pageWrapper: {
@@ -90,6 +108,23 @@ const styles = {
     marginTop: '1.5rem',
     padding: '1rem 0',
     borderTop: '1px solid #dee2e6',
+  },
+  cartSummary: {
+    position: 'fixed' as const,
+    top: '1rem',
+    right: '1rem',
+    backgroundColor: '#fff',
+    padding: '1rem',
+    borderRadius: '0.375rem',
+    boxShadow: '0 0.125rem 0.25rem rgba(0, 0, 0, 0.075)',
+    zIndex: 1000,
+    minWidth: '250px',
+  },
+  addToCartButton: {
+    padding: '0.25rem 0.5rem',
+    fontSize: '0.875rem',
+    lineHeight: 1.5,
+    borderRadius: '0.2rem',
   }
 } as const;
 
@@ -113,6 +148,83 @@ interface BookResponse {
   totalPages: number;
 }
 
+export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [cart, setCart] = useState<CartItem[]>([]);
+
+  const addToCart = (book: Book) => {
+    setCart(currentCart => {
+      const existingItem = currentCart.find(item => item.bookID === book.bookID);
+      if (existingItem) {
+        return currentCart.map(item =>
+          item.bookID === book.bookID
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+      }
+      return [...currentCart, { ...book, quantity: 1 }];
+    });
+  };
+
+  const updateQuantity = (bookId: number, quantity: number) => {
+    setCart(currentCart =>
+      currentCart.map(item =>
+        item.bookID === bookId
+          ? { ...item, quantity: Math.max(0, quantity) }
+          : item
+      ).filter(item => item.quantity > 0)
+    );
+  };
+
+  const getCartTotal = () => {
+    return cart.reduce((total, item) => total + item.price * item.quantity, 0);
+  };
+
+  return (
+    <CartContext.Provider value={{ cart, addToCart, updateQuantity, getCartTotal }}>
+      {children}
+    </CartContext.Provider>
+  );
+};
+
+const CartSummary = () => {
+  const { cart, getCartTotal } = React.useContext(CartContext);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (cart.length === 0) return null;
+
+  return (
+    <div style={styles.cartSummary} className="border">
+      <div className="d-flex justify-content-between align-items-center mb-2">
+        <h5 className="mb-0">Cart Summary</h5>
+        <button 
+          className="btn btn-link p-0" 
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          {isExpanded ? '▼' : '▲'}
+        </button>
+      </div>
+      {isExpanded && (
+        <>
+          {cart.map(item => (
+            <div key={item.bookID} className="d-flex justify-content-between mb-1">
+              <small>{item.title} (x{item.quantity})</small>
+              <small>${(item.price * item.quantity).toFixed(2)}</small>
+            </div>
+          ))}
+          <hr className="my-2" />
+        </>
+      )}
+      <div className="d-flex justify-content-between">
+        <strong>Total:</strong>
+        <strong>${getCartTotal().toFixed(2)}</strong>
+      </div>
+      <Link to="/cart" className="btn btn-primary w-100 mt-2">
+        View Cart
+      </Link>
+    </div>
+  );
+};
+
 const BookList = () => {
   const [books, setBooks] = useState<Book[]>([]);
   const [pageSize, setPageSize] = useState(5);
@@ -123,10 +235,22 @@ const BookList = () => {
   const [sortOrder, setSortOrder] = useState('asc');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const { addToCart } = React.useContext(CartContext);
+
+  // Fetch categories
+  useEffect(() => {
+    fetch('/api/Books/categories')
+      .then(res => res.json())
+      .then(data => setCategories(data))
+      .catch(err => console.error('Failed to fetch categories:', err));
+  }, []);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/Books?pageNumber=${page}&pageSize=${pageSize}&sortField=${sortField}&sortOrder=${sortOrder}`)
+    const categoryParam = selectedCategory ? `&category=${encodeURIComponent(selectedCategory)}` : '';
+    fetch(`/api/Books?pageNumber=${page}&pageSize=${pageSize}&sortField=${sortField}&sortOrder=${sortOrder}${categoryParam}`)
       .then((res) => {
         if (!res.ok) {
           throw new Error('Failed to fetch books');
@@ -143,7 +267,7 @@ const BookList = () => {
         setError(err.message);
         setLoading(false);
       });
-  }, [page, pageSize, sortField, sortOrder]);
+  }, [page, pageSize, sortField, sortOrder, selectedCategory]);
 
   if (loading) {
     return (
@@ -180,6 +304,24 @@ const BookList = () => {
         
         <div style={styles.controlsContainer}>
           <div style={styles.controlsWrapper}>
+            <div style={styles.controlGroup}>
+              <label style={styles.label}>Category:</label>
+              <select 
+                className="form-select form-select-sm"
+                style={{ width: '160px' }}
+                value={selectedCategory} 
+                onChange={(e) => {
+                  setSelectedCategory(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">All Categories</option>
+                {categories.map((category) => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </select>
+            </div>
+
             <div style={styles.controlGroup}>
               <label style={styles.label}>Page Size:</label>
               <select 
@@ -236,14 +378,15 @@ const BookList = () => {
             <table style={styles.table} className="table table-hover">
               <thead>
                 <tr>
-                  <th style={{...styles.headerCell, width: '20%'}}>Title</th>
-                  <th style={{...styles.headerCell, width: '15%'}}>Author</th>
-                  <th style={{...styles.headerCell, width: '15%'}}>Publisher</th>
-                  <th style={{...styles.headerCell, width: '15%'}}>ISBN</th>
-                  <th style={{...styles.headerCell, width: '12%'}}>Classification</th>
-                  <th style={{...styles.headerCell, width: '12%'}}>Category</th>
+                  <th style={{...styles.headerCell, width: '18%'}}>Title</th>
+                  <th style={{...styles.headerCell, width: '13%'}}>Author</th>
+                  <th style={{...styles.headerCell, width: '13%'}}>Publisher</th>
+                  <th style={{...styles.headerCell, width: '13%'}}>ISBN</th>
+                  <th style={{...styles.headerCell, width: '11%'}}>Classification</th>
+                  <th style={{...styles.headerCell, width: '11%'}}>Category</th>
                   <th style={{...styles.headerCell, width: '5%', textAlign: 'right'}}>Pages</th>
-                  <th style={{...styles.headerCell, width: '6%', textAlign: 'right'}}>Price</th>
+                  <th style={{...styles.headerCell, width: '8%', textAlign: 'right'}}>Price</th>
+                  <th style={{...styles.headerCell, width: '8%'}}></th>
                 </tr>
               </thead>
               <tbody>
@@ -257,11 +400,21 @@ const BookList = () => {
                     <td style={styles.cell}>{book.category}</td>
                     <td style={{...styles.cell, textAlign: 'right'}}>{book.pageCount}</td>
                     <td style={{...styles.cell, textAlign: 'right'}}>${book.price.toFixed(2)}</td>
+                    <td style={styles.cell}>
+                      <button
+                        className="btn btn-outline-primary btn-sm"
+                        style={styles.addToCartButton}
+                        onClick={() => addToCart(book)}
+                      >
+                        Add to Cart
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {/* Add empty rows to maintain height when less data */}
                 {books.length < pageSize && Array(pageSize - books.length).fill(0).map((_, index) => (
                   <tr key={`empty-${index}`}>
+                    <td style={styles.cell}>&nbsp;</td>
                     <td style={styles.cell}>&nbsp;</td>
                     <td style={styles.cell}>&nbsp;</td>
                     <td style={styles.cell}>&nbsp;</td>
@@ -322,6 +475,7 @@ const BookList = () => {
             </nav>
           </div>
         </div>
+        <CartSummary />
       </div>
     </div>
   );
